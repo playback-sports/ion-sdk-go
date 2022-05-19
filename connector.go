@@ -4,8 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"github.com/pion/ion/proto/rtc"
 	"io/ioutil"
+
+	"github.com/pion/ion/proto/rtc"
 
 	log "github.com/pion/ion-log"
 	"google.golang.org/grpc"
@@ -46,8 +47,22 @@ type Connector struct {
 	ctx context.Context
 }
 
+type extraMetadata struct {
+	PodID string
+}
+
+func (c extraMetadata) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		"x-pod-id": c.PodID,
+	}, nil
+}
+
+func (c extraMetadata) RequireTransportSecurity() bool {
+	return false
+}
+
 // NewConnector create a ion connector
-func NewConnector(addr string, config ...ConnectorConfig) *Connector {
+func NewConnector(addr, podID string, config ...ConnectorConfig) *Connector {
 	c := &Connector{
 		services: make(map[string]Service),
 		Metadata: make(metadata.MD),
@@ -88,13 +103,13 @@ func NewConnector(addr string, config ...ConnectorConfig) *Connector {
 			}
 		}
 
-		c.grpcConn, err = grpc.Dial(addr, grpc.WithTransportCredentials(credentials.NewTLS(config)), grpc.WithBlock())
+		c.grpcConn, err = grpc.Dial(addr, grpc.WithTransportCredentials(credentials.NewTLS(config)), grpc.WithPerRPCCredentials(extraMetadata{PodID: podID}), grpc.WithBlock())
 		if err != nil {
 			log.Errorf("did not connect: %v", err)
 			return nil
 		}
 	} else {
-		c.grpcConn, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock())
+		c.grpcConn, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithPerRPCCredentials(extraMetadata{PodID: podID}), grpc.WithBlock())
 	}
 
 	if err != nil {
