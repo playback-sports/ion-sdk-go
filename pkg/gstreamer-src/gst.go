@@ -42,8 +42,9 @@ const (
 
 // CreatePipeline creates a GStreamer Pipeline
 func CreatePipeline(codecName string, tracks []*webrtc.TrackLocalStaticSample, pipelineInput string) *Pipeline {
-	pipelineStr := pipelineInput + " appsink name=appsink"
+	pipelineStr := pipelineInput + " ! appsink name=appsink"
 	var clockRate float32 = videoClockRate
+	fmt.Printf("pipeline str: %s\n", pipelineStr)
 
 	// switch codecName {
 	// case "vp8":
