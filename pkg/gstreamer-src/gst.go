@@ -41,42 +41,43 @@ const (
 )
 
 // CreatePipeline creates a GStreamer Pipeline
-func CreatePipeline(codecName string, tracks []*webrtc.TrackLocalStaticSample, pipelineSrc string) *Pipeline {
-	pipelineStr := "appsink name=appsink"
-	var clockRate float32
+func CreatePipeline(codecName string, tracks []*webrtc.TrackLocalStaticSample, pipelineInput string) *Pipeline {
+	pipelineStr := pipelineInput + " appsink name=appsink"
+	// var clockRate float32
+	clockRate := videoClockRate
 
-	switch codecName {
-	case "vp8":
-		pipelineStr = pipelineSrc + " ! vp8enc error-resilient=partitions keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 deadline=1 ! " + pipelineStr
-		clockRate = videoClockRate
+	// switch codecName {
+	// case "vp8":
+	// 	pipelineStr = pipelineSrc + " ! vp8enc error-resilient=partitions keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 deadline=1 ! " + pipelineStr
+	// 	clockRate = videoClockRate
 
-	case "vp9":
-		pipelineStr = pipelineSrc + " ! vp9enc ! " + pipelineStr
-		clockRate = videoClockRate
+	// case "vp9":
+	// 	pipelineStr = pipelineSrc + " ! vp9enc ! " + pipelineStr
+	// 	clockRate = videoClockRate
 
-	case "h264":
-		pipelineStr = pipelineSrc + " ! video/x-raw,format=I420 ! x264enc speed-preset=medium tune=zerolatency key-int-max=20 ! video/x-h264,stream-format=byte-stream ! " + pipelineStr
-		clockRate = videoClockRate
+	// case "h264":
+	// 	pipelineStr = pipelineSrc + " ! video/x-raw,format=I420 ! x264enc speed-preset=medium tune=zerolatency key-int-max=20 ! video/x-h264,stream-format=byte-stream ! " + pipelineStr
+	// 	clockRate = videoClockRate
 
-	case "opus":
-		pipelineStr = pipelineSrc + " ! opusenc ! " + pipelineStr
-		clockRate = audioClockRate
+	// case "opus":
+	// 	pipelineStr = pipelineSrc + " ! opusenc ! " + pipelineStr
+	// 	clockRate = audioClockRate
 
-	case "g722":
-		pipelineStr = pipelineSrc + " ! avenc_g722 ! " + pipelineStr
-		clockRate = audioClockRate
+	// case "g722":
+	// 	pipelineStr = pipelineSrc + " ! avenc_g722 ! " + pipelineStr
+	// 	clockRate = audioClockRate
 
-	case "pcmu":
-		pipelineStr = pipelineSrc + " ! audio/x-raw, rate=8000 ! mulawenc ! " + pipelineStr
-		clockRate = pcmClockRate
+	// case "pcmu":
+	// 	pipelineStr = pipelineSrc + " ! audio/x-raw, rate=8000 ! mulawenc ! " + pipelineStr
+	// 	clockRate = pcmClockRate
 
-	case "pcma":
-		pipelineStr = pipelineSrc + " ! audio/x-raw, rate=8000 ! alawenc ! " + pipelineStr
-		clockRate = pcmClockRate
+	// case "pcma":
+	// 	pipelineStr = pipelineSrc + " ! audio/x-raw, rate=8000 ! alawenc ! " + pipelineStr
+	// 	clockRate = pcmClockRate
 
-	default:
-		panic("Unhandled codec " + codecName)
-	}
+	// default:
+	// 	panic("Unhandled codec " + codecName)
+	// }
 
 	pipelineStrUnsafe := C.CString(pipelineStr)
 	defer C.free(unsafe.Pointer(pipelineStrUnsafe))
