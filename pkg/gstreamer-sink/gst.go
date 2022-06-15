@@ -2,7 +2,7 @@
 package gst
 
 /*
-#cgo pkg-config: gstreamer-1.0 gstreamer-app-1.0
+#cgo pkg-config: gstreamer-1.0 gstreamer-app-1.0 --cflas
 
 #include "gst.h"
 
