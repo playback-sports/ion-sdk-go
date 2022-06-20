@@ -3,7 +3,6 @@
 #include <gst/app/gstappsrc.h>
 
 typedef struct SampleHandlerUserData {
-  int pipelineId;
 } SampleHandlerUserData;
 
 GMainLoop *gstreamer_send_main_loop = NULL;
@@ -39,7 +38,7 @@ static gboolean gstreamer_send_bus_call(GstBus *bus, GstMessage *msg, gpointer d
   return TRUE;
 }
 
-GstFlowReturn gstreamer_send_new_sample_handler(GstElement *object, gpointer user_data) {
+GstFlowReturn gstreamer_send_new_audio_sample_handler(GstElement *object, gpointer user_data) {
   GstSample *sample = NULL;
   GstBuffer *buffer = NULL;
   gpointer copy = NULL;
@@ -51,7 +50,7 @@ GstFlowReturn gstreamer_send_new_sample_handler(GstElement *object, gpointer use
     buffer = gst_sample_get_buffer(sample);
     if (buffer) {
       gst_buffer_extract_dup(buffer, 0, gst_buffer_get_size(buffer), &copy, &copy_size);
-      goHandlePipelineBuffer(copy, copy_size, GST_BUFFER_DURATION(buffer), s->pipelineId);
+      goHandleAudioPipelineBuffer(copy, copy_size, GST_BUFFER_DURATION(buffer));
     }
     gst_sample_unref (sample);
   }
@@ -59,24 +58,49 @@ GstFlowReturn gstreamer_send_new_sample_handler(GstElement *object, gpointer use
   return GST_FLOW_OK;
 }
 
+GstFlowReturn gstreamer_send_new_video_sample_handler(GstElement *object, gpointer user_data) {
+  GstSample *sample = NULL;
+  GstBuffer *buffer = NULL;
+  gpointer copy = NULL;
+  gsize copy_size = 0;
+  SampleHandlerUserData *s = (SampleHandlerUserData *)user_data;
+
+  g_signal_emit_by_name (object, "pull-sample", &sample);
+  if (sample) {
+    buffer = gst_sample_get_buffer(sample);
+    if (buffer) {
+      gst_buffer_extract_dup(buffer, 0, gst_buffer_get_size(buffer), &copy, &copy_size);
+      goHandleVideoPipelineBuffer(copy, copy_size, GST_BUFFER_DURATION(buffer));
+    }
+    gst_sample_unref (sample);
+  }
+
+  return GST_FLOW_OK;
+}
+
+
 GstElement *gstreamer_send_create_pipeline(char *pipeline) {
   gst_init(NULL, NULL);
   GError *error = NULL;
   return gst_parse_launch(pipeline, &error);
 }
 
-void gstreamer_send_start_pipeline(GstElement *pipeline, int pipelineId) {
+void gstreamer_send_start_pipeline(GstElement *pipeline) {
   SampleHandlerUserData *s = calloc(1, sizeof(SampleHandlerUserData));
-  s->pipelineId = pipelineId;
 
   GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
   gst_bus_add_watch(bus, gstreamer_send_bus_call, NULL);
   gst_object_unref(bus);
 
-  GstElement *appsink = gst_bin_get_by_name(GST_BIN(pipeline), "appsink");
-  g_object_set(appsink, "emit-signals", TRUE, NULL);
-  g_signal_connect(appsink, "new-sample", G_CALLBACK(gstreamer_send_new_sample_handler), s);
-  gst_object_unref(appsink);
+  GstElement *appsinkaudio = gst_bin_get_by_name(GST_BIN(pipeline), "appsinkaudio");
+  g_object_set(appsinkaudio, "emit-signals", TRUE, NULL);
+  g_signal_connect(appsinkaudio, "new-sample", G_CALLBACK(gstreamer_send_new_audio_sample_handler), s);
+  gst_object_unref(appsinkaudio);
+
+  GstElement *appsinkvideo = gst_bin_get_by_name(GST_BIN(pipeline), "appsinkvideo");
+  g_object_set(appsinkvideo, "emit-signals", TRUE, NULL);
+  g_signal_connect(appsinkvideo, "new-sample", G_CALLBACK(gstreamer_send_new_video_sample_handler), s);
+  gst_object_unref(appsinkvideo);
 
   gst_element_set_state(pipeline, GST_STATE_PLAYING);
 }

@@ -10,7 +10,6 @@ package gst
 import "C"
 import (
 	"fmt"
-	"sync"
 	"time"
 	"unsafe"
 
@@ -24,81 +23,28 @@ func init() {
 
 // Pipeline is a wrapper for a GStreamer Pipeline
 type Pipeline struct {
-	Pipeline  *C.GstElement
-	tracks    []*webrtc.TrackLocalStaticSample
-	id        int
-	codecName string
-	clockRate float32
+	Pipeline   *C.GstElement
+	videoTrack *webrtc.TrackLocalStaticSample
+	audioTrack *webrtc.TrackLocalStaticSample
 }
 
-var pipelines = make(map[int]*Pipeline)
-var pipelinesLock sync.Mutex
+var pipeline *Pipeline
 
-const (
-	videoClockRate = 90000
-	audioClockRate = 48000
-	pcmClockRate   = 8000
-)
-
-// CreatePipeline creates a GStreamer Pipeline
-func CreatePipeline(codecName string, tracks []*webrtc.TrackLocalStaticSample, pipelineSrc string) *Pipeline {
-	pipelineStr := "appsink name=appsink"
-	var clockRate float32
-
-	switch codecName {
-	case "vp8":
-		pipelineStr = pipelineSrc + " ! vp8enc error-resilient=partitions keyframe-max-dist=10 auto-alt-ref=true cpu-used=5 deadline=1 ! " + pipelineStr
-		clockRate = videoClockRate
-
-	case "vp9":
-		pipelineStr = pipelineSrc + " ! vp9enc ! " + pipelineStr
-		clockRate = videoClockRate
-
-	case "h264":
-		pipelineStr = pipelineSrc + " ! video/x-raw,format=I420 ! x264enc speed-preset=fast tune=zerolatency key-int-max=20 ! video/x-h264,stream-format=byte-stream ! " + pipelineStr
-		clockRate = videoClockRate
-
-	case "opus":
-		pipelineStr = pipelineSrc + " ! opusenc ! " + pipelineStr
-		clockRate = audioClockRate
-
-	case "g722":
-		pipelineStr = pipelineSrc + " ! avenc_g722 ! " + pipelineStr
-		clockRate = audioClockRate
-
-	case "pcmu":
-		pipelineStr = pipelineSrc + " ! audio/x-raw, rate=8000 ! mulawenc ! " + pipelineStr
-		clockRate = pcmClockRate
-
-	case "pcma":
-		pipelineStr = pipelineSrc + " ! audio/x-raw, rate=8000 ! alawenc ! " + pipelineStr
-		clockRate = pcmClockRate
-
-	default:
-		panic("Unhandled codec " + codecName)
-	}
-
+func CreateURIDecodeBinPipeline(uri string, videoTrack, audioTrack *webrtc.TrackLocalStaticSample) *Pipeline {
+	pipelineStr := fmt.Sprintf("uridecodebin uri=%s name=dec ! x264enc ! video/x-h264,stream-format=byte-stream ! appsink name=appsinkvideo dec. ! queue ! audioconvert ! audioresample ! opusenc ! appsink name=appsinkaudio", uri)
 	pipelineStrUnsafe := C.CString(pipelineStr)
 	defer C.free(unsafe.Pointer(pipelineStrUnsafe))
 
-	pipelinesLock.Lock()
-	defer pipelinesLock.Unlock()
-
-	pipeline := &Pipeline{
-		Pipeline:  C.gstreamer_send_create_pipeline(pipelineStrUnsafe),
-		tracks:    tracks,
-		id:        len(pipelines),
-		codecName: codecName,
-		clockRate: clockRate,
+	return &Pipeline{
+		Pipeline:   C.gstreamer_send_create_pipeline(pipelineStrUnsafe),
+		videoTrack: videoTrack,
+		audioTrack: audioTrack,
 	}
-
-	pipelines[pipeline.id] = pipeline
-	return pipeline
 }
 
 // Start starts the GStreamer Pipeline
 func (p *Pipeline) Start() {
-	C.gstreamer_send_start_pipeline(p.Pipeline, C.int(p.id))
+	C.gstreamer_send_start_pipeline(p.Pipeline)
 }
 
 // Stop stops the GStreamer Pipeline
@@ -106,20 +52,18 @@ func (p *Pipeline) Stop() {
 	C.gstreamer_send_stop_pipeline(p.Pipeline)
 }
 
-//export goHandlePipelineBuffer
-func goHandlePipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, duration C.int, pipelineID C.int) {
-	pipelinesLock.Lock()
-	pipeline, ok := pipelines[int(pipelineID)]
-	pipelinesLock.Unlock()
+//export goHandleAudioPipelineBuffer
+func goHandleAudioPipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, duration C.int) {
+	if err := pipeline.audioTrack.WriteSample(media.Sample{Data: C.GoBytes(buffer, bufferLen), Duration: time.Duration(duration)}); err != nil {
+		panic(err)
+	}
+	C.free(buffer)
+}
 
-	if ok {
-		for _, t := range pipeline.tracks {
-			if err := t.WriteSample(media.Sample{Data: C.GoBytes(buffer, bufferLen), Duration: time.Duration(duration)}); err != nil {
-				panic(err)
-			}
-		}
-	} else {
-		fmt.Printf("discarding buffer, no pipeline with id %d", int(pipelineID))
+//export goHandleVideoPipelineBuffer
+func goHandleVideoPipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, duration C.int) {
+	if err := pipeline.videoTrack.WriteSample(media.Sample{Data: C.GoBytes(buffer, bufferLen), Duration: time.Duration(duration)}); err != nil {
+		panic(err)
 	}
 	C.free(buffer)
 }
