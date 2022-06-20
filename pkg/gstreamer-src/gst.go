@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 	"unsafe"
+	"log"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
@@ -54,6 +55,7 @@ func (p *Pipeline) Stop() {
 
 //export goHandleAudioPipelineBuffer
 func goHandleAudioPipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, duration C.int) {
+	log.Printf("goHandleAudioPipelineBuffer %v", pipeline.audioTrack)
 	if err := pipeline.audioTrack.WriteSample(media.Sample{Data: C.GoBytes(buffer, bufferLen), Duration: time.Duration(duration)}); err != nil {
 		panic(err)
 	}
@@ -62,6 +64,7 @@ func goHandleAudioPipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, duratio
 
 //export goHandleVideoPipelineBuffer
 func goHandleVideoPipelineBuffer(buffer unsafe.Pointer, bufferLen C.int, duration C.int) {
+	log.Printf("goHandleVideoPipelineBuffer %v", pipeline.videoTrack)
 	if err := pipeline.videoTrack.WriteSample(media.Sample{Data: C.GoBytes(buffer, bufferLen), Duration: time.Duration(duration)}); err != nil {
 		panic(err)
 	}
