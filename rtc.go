@@ -21,7 +21,7 @@ const (
 	API_CHANNEL = "ion-sfu"
 )
 
-//Call dc api
+// Call dc api
 type Call struct {
 	StreamID string `json:"streamId"`
 	Video    string `json:"video"`
@@ -306,6 +306,27 @@ func (r *RTC) GetSubTransport() *Transport {
 	return r.sub
 }
 
+func (r *RTC) PublishSimulcast(tracks ...webrtc.TrackLocal) (*webrtc.RTPSender, error) {
+
+	var rtpSender *webrtc.RTPSender
+	for _, t := range tracks {
+		if rtpSender == nil {
+			var err error
+			rtpSender, err = r.pub.GetPeerConnection().AddTrack(t)
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+		err := rtpSender.AddEncoding(t)
+		if err != nil {
+			return nil, err
+		}
+	}
+	r.OnNegotiationNeeded()
+	return rtpSender, nil
+}
+
 // Publish local tracks
 func (r *RTC) Publish(tracks ...webrtc.TrackLocal) ([]*webrtc.RTPSender, error) {
 	var rtpSenders []*webrtc.RTPSender
@@ -318,7 +339,7 @@ func (r *RTC) Publish(tracks ...webrtc.TrackLocal) ([]*webrtc.RTPSender, error) 
 		}
 
 	}
-	r.onNegotiationNeeded()
+	r.OnNegotiationNeeded()
 	return rtpSenders, nil
 }
 
@@ -329,7 +350,7 @@ func (r *RTC) UnPublish(senders ...*webrtc.RTPSender) error {
 			return err
 		}
 	}
-	r.onNegotiationNeeded()
+	r.OnNegotiationNeeded()
 	return nil
 }
 
@@ -412,7 +433,7 @@ func (r *RTC) negotiate(sdp webrtc.SessionDescription) error {
 }
 
 // onNegotiationNeeded will be called when add/remove track, but never trigger, call by hand
-func (r *RTC) onNegotiationNeeded() {
+func (r *RTC) OnNegotiationNeeded() {
 	// 1. pub create offer
 	offer, err := r.pub.pc.CreateOffer(nil)
 	if err != nil {
@@ -516,7 +537,7 @@ func (r *RTC) PublishFile(file string, video, audio bool) error {
 	}
 	r.producer.Start()
 	//trigger by hand
-	r.onNegotiationNeeded()
+	r.OnNegotiationNeeded()
 	return nil
 }
 
